@@ -65,14 +65,21 @@ jobs:
         # Export each table to CSV with headers
         for table in $TABLE_NAMES; do
           FILE_NAME=$(echo $table | tr '.' '_')
-          # Export the headers
-          docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -d AdventureWorks2019 -Q "SET NOCOUNT ON; SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = PARSENAME('$table', 1) AND TABLE_SCHEMA = PARSENAME('$table', 2) ORDER BY ORDINAL_POSITION" -W -h-1 | tr '\n' ',' | sed 's/,$//' > $(pwd)/csv_exports/${FILE_NAME}.csv
-          # Export the data
-          docker exec sqlserver /opt/mssql-tools/bin/bcp "$table" out /var/opt/mssql/csv_exports/${FILE_NAME}_data.csv -c -t, -S localhost -U sa -P 'YourStrong!Passw0rd'
-          # Combine headers and data
-          cat $(pwd)/csv_exports/${FILE_NAME}.csv <(docker exec sqlserver cat /var/opt/mssql/csv_exports/${FILE_NAME}_data.csv) > $(pwd)/csv_exports/${FILE_NAME}_final.csv
-          mv $(pwd)/csv_exports/${FILE_NAME}_final.csv $(pwd)/csv_exports/${FILE_NAME}.csv
-          docker exec sqlserver rm /var/opt/mssql/csv_exports/${FILE_NAME}_data.csv
+          # Check if table exists
+          TABLE_EXISTS=$(docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -d AdventureWorks2019 -Q "IF OBJECT_ID('$table', 'U') IS NOT NULL SELECT 1 ELSE SELECT 0" -h -1 | tail -n +3)
+          if [ "$TABLE_EXISTS" -eq 1 ]; then
+            echo "Exporting $table..."
+            # Export the headers
+            docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -d AdventureWorks2019 -Q "SET NOCOUNT ON; SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = PARSENAME('$table', 1) AND TABLE_SCHEMA = PARSENAME('$table', 2) ORDER BY ORDINAL_POSITION" -W -h-1 | tr '\n' ',' | sed 's/,$//' > $(pwd)/csv_exports/${FILE_NAME}.csv
+            # Export the data
+            docker exec sqlserver /opt/mssql-tools/bin/bcp "$table" out /var/opt/mssql/csv_exports/${FILE_NAME}_data.csv -c -t, -S localhost -U sa -P 'YourStrong!Passw0rd'
+            # Combine headers and data
+            cat $(pwd)/csv_exports/${FILE_NAME}.csv <(docker exec sqlserver cat /var/opt/mssql/csv_exports/${FILE_NAME}_data.csv) > $(pwd)/csv_exports/${FILE_NAME}_final.csv
+            mv $(pwd)/csv_exports/${FILE_NAME}_final.csv $(pwd)/csv_exports/${FILE_NAME}.csv
+            docker exec sqlserver rm /var/opt/mssql/csv_exports/${FILE_NAME}_data.csv
+          else
+            echo "Table $table does not exist. Skipping."
+          fi
         done
         # Copy the csv_exports directory from the container to the host
         docker cp sqlserver:/var/opt/mssql/csv_exports $(pwd)/csv_exports
