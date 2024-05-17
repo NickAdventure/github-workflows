@@ -1,17 +1,18 @@
 name: Export AdventureWorks Tables to CSV
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   export-tables:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout Repository
+    - name: Checkout repository
       uses: actions/checkout@v2
 
-    - name: Check .bak file exists
+    - name: Check if AdventureWorks.bak exists
       run: |
         if [ ! -f $(pwd)/AdventureWorks.bak ]; then
           echo "AdventureWorks.bak file not found!"
@@ -21,62 +22,53 @@ jobs:
           ls -lh $(pwd)/AdventureWorks.bak
         fi
 
-    - name: Set up SQL Server
+    - name: Start SQL Server container
       run: |
         docker pull mcr.microsoft.com/mssql/server:2019-latest
-        docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=${{ secrets.SA_PASSWORD }}' -p 1433:1433 -d --name sqlserver --privileged --user root mcr.microsoft.com/mssql/server:2019-latest
+        docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=YourStrong!Passw0rd' -p 1433:1433 -d --name sqlserver --privileged --user root mcr.microsoft.com/mssql/server:2019-latest
         # Wait for SQL Server to be fully up and running
-        for i in {1..10}; do
+        for i in {1..20}; do
           if docker logs sqlserver 2>&1 | grep -q "SQL Server is now ready for client connections"; then
             echo "SQL Server is up and running"
             break
           fi
-          echo "Waiting for SQL Server to start... ($i/10)"
+          echo "Waiting for SQL Server to start... ($i/20)"
           docker ps -a
           docker logs sqlserver
           sleep 5
         done
-        if [ $i -eq 10 ]; then
+        if [ $i -eq 20 ]; then
           echo "SQL Server failed to start in time"
           docker ps -a
           docker logs sqlserver
           exit 1
         fi
 
-    - name: Copy AdventureWorks.bak to SQL Server container
+    - name: Copy AdventureWorks.bak to container
       run: |
         docker cp $(pwd)/AdventureWorks.bak sqlserver:/AdventureWorks.bak
         echo "File copied. Checking file in container..."
         docker exec sqlserver ls -lh /AdventureWorks.bak
         docker exec sqlserver du -h /AdventureWorks.bak
 
-    - name: Get logical file names
+    - name: Restore AdventureWorks database
       run: |
-        docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${{ secrets.SA_PASSWORD }} -Q "RESTORE FILELISTONLY FROM DISK = '/AdventureWorks.bak';" > filelist.txt
-        cat filelist.txt
-      env:
-        SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
+        LOGICAL_DATA_NAME=$(docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -Q "RESTORE FILELISTONLY FROM DISK = '/AdventureWorks.bak';" | awk '/AdventureWorks/ && /Data/ {print $1}')
+        LOGICAL_LOG_NAME=$(docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -Q "RESTORE FILELISTONLY FROM DISK = '/AdventureWorks.bak';" | awk '/AdventureWorks/ && /Log/ {print $1}')
+        docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -Q "RESTORE DATABASE AdventureWorks FROM DISK = '/AdventureWorks.bak' WITH MOVE '$LOGICAL_DATA_NAME' TO '/var/opt/mssql/data/AdventureWorks.mdf', MOVE '$LOGICAL_LOG_NAME' TO '/var/opt/mssql/data/AdventureWorks_log.ldf';"
 
-    - name: Restore AdventureWorks Database
-      run: |
-        LOGICAL_DATA_NAME=$(awk '/AdventureWorks/ && /Data/ {print $1}' filelist.txt)
-        LOGICAL_LOG_NAME=$(awk '/AdventureWorks/ && /Log/ {print $1}' filelist.txt)
-        docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${{ secrets.SA_PASSWORD }} -Q "RESTORE DATABASE AdventureWorks FROM DISK = '/AdventureWorks.bak' WITH MOVE '$LOGICAL_DATA_NAME' TO '/var/opt/mssql/data/AdventureWorks.mdf', MOVE '$LOGICAL_LOG_NAME' TO '/var/opt/mssql/data/AdventureWorks_log.ldf';"
-      env:
-        SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
-
-    - name: Export Tables to CSV
+    - name: Export tables to CSV
       run: |
         mkdir -p csv_exports
-        TABLE_NAMES=$(docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${{ secrets.SA_PASSWORD }} -Q "SET NOCOUNT ON; SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE';" -h -1 | tail -n +3)
+        TABLE_NAMES=$(docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -Q "SET NOCOUNT ON; SELECT TABLE_NAME FROM AdventureWorks.INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE';" -h -1 | tail -n +3)
         for table in $TABLE_NAMES; do
-          docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${{ secrets.SA_PASSWORD }} -Q "SET NOCOUNT ON; SELECT * FROM $table;" -W -w 1024 | sed 's/ /,/g' > csv_exports/$table.csv
+          docker exec sqlserver /opt/mssql-tools/bin/bcp AdventureWorks..$table out /csv_exports/$table.csv -c -t, -S localhost -U sa -P 'YourStrong!Passw0rd'
+          docker cp sqlserver:/csv_exports/$table.csv csv_exports/
         done
-      env:
-        SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
 
     - name: Upload CSV files
       uses: actions/upload-artifact@v2
       with:
         name: csv-exports
         path: csv_exports/
+        if-no-files-found: warn
