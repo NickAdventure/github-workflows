@@ -50,9 +50,18 @@ jobs:
         docker exec sqlserver ls -lh /AdventureWorks.bak
         docker exec sqlserver du -h /AdventureWorks.bak
 
+    - name: Get logical file names
+      run: |
+        docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${{ secrets.SA_PASSWORD }} -Q "RESTORE FILELISTONLY FROM DISK = '/AdventureWorks.bak';" > filelist.txt
+        cat filelist.txt
+      env:
+        SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
+
     - name: Restore AdventureWorks Database
       run: |
-        docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${{ secrets.SA_PASSWORD }} -Q "RESTORE DATABASE AdventureWorks FROM DISK = '/AdventureWorks.bak' WITH MOVE 'AdventureWorks_Data' TO '/var/opt/mssql/data/AdventureWorks.mdf', MOVE 'AdventureWorks_Log' TO '/var/opt/mssql/data/AdventureWorks_log.ldf';"
+        LOGICAL_DATA_NAME=$(awk '/AdventureWorks/ && /Data/ {print $1}' filelist.txt)
+        LOGICAL_LOG_NAME=$(awk '/AdventureWorks/ && /Log/ {print $1}' filelist.txt)
+        docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${{ secrets.SA_PASSWORD }} -Q "RESTORE DATABASE AdventureWorks FROM DISK = '/AdventureWorks.bak' WITH MOVE '$LOGICAL_DATA_NAME' TO '/var/opt/mssql/data/AdventureWorks.mdf', MOVE '$LOGICAL_LOG_NAME' TO '/var/opt/mssql/data/AdventureWorks_log.ldf';"
       env:
         SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
 
