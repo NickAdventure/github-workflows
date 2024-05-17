@@ -12,15 +12,11 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v2
 
-    - name: Check if AdventureWorks.bak exists
+    - name: Download AdventureWorksDW2019.bak
       run: |
-        if [ ! -f $(pwd)/AdventureWorks.bak ]; then
-          echo "AdventureWorks.bak file not found!"
-          exit 1
-        else
-          echo "AdventureWorks.bak file found. File details:"
-          ls -lh $(pwd)/AdventureWorks.bak
-        fi
+        curl -L -o AdventureWorksDW2019.bak https://github.com/Microsoft/sql-server-samples/releases/download/adventureworks/AdventureWorksDW2019.bak
+        echo "Downloaded AdventureWorksDW2019.bak file. File details:"
+        ls -lh AdventureWorksDW2019.bak
 
     - name: Start SQL Server container
       run: |
@@ -44,28 +40,28 @@ jobs:
           exit 1
         fi
 
-    - name: Copy AdventureWorks.bak to container
+    - name: Copy AdventureWorksDW2019.bak to container
       run: |
-        docker cp $(pwd)/AdventureWorks.bak sqlserver:/AdventureWorks.bak
+        docker cp $(pwd)/AdventureWorksDW2019.bak sqlserver:/AdventureWorksDW2019.bak
         echo "File copied. Checking file in container..."
-        docker exec sqlserver ls -lh /AdventureWorks.bak
-        docker exec sqlserver du -h /AdventureWorks.bak
+        docker exec sqlserver ls -lh /AdventureWorksDW2019.bak
+        docker exec sqlserver du -h /AdventureWorksDW2019.bak
 
-    - name: Restore AdventureWorks database
+    - name: Restore AdventureWorksDW2019 database
       run: |
-        LOGICAL_DATA_NAME=$(docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -Q "RESTORE FILELISTONLY FROM DISK = '/AdventureWorks.bak';" | awk '/AdventureWorks/ && /Data/ {print $1}')
-        LOGICAL_LOG_NAME=$(docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -Q "RESTORE FILELISTONLY FROM DISK = '/AdventureWorks.bak';" | awk '/AdventureWorks/ && /Log/ {print $1}')
-        docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -Q "RESTORE DATABASE AdventureWorks FROM DISK = '/AdventureWorks.bak' WITH MOVE '$LOGICAL_DATA_NAME' TO '/var/opt/mssql/data/AdventureWorks.mdf', MOVE '$LOGICAL_LOG_NAME' TO '/var/opt/mssql/data/AdventureWorks_log.ldf';"
+        LOGICAL_DATA_NAME=$(docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -Q "RESTORE FILELISTONLY FROM DISK = '/AdventureWorksDW2019.bak';" | awk '/AdventureWorks/ && /Data/ {print $1}')
+        LOGICAL_LOG_NAME=$(docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -Q "RESTORE FILELISTONLY FROM DISK = '/AdventureWorksDW2019.bak';" | awk '/AdventureWorks/ && /Log/ {print $1}')
+        docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -Q "RESTORE DATABASE AdventureWorksDW2019 FROM DISK = '/AdventureWorksDW2019.bak' WITH MOVE '$LOGICAL_DATA_NAME' TO '/var/opt/mssql/data/AdventureWorksDW2019.mdf', MOVE '$LOGICAL_LOG_NAME' TO '/var/opt/mssql/data/AdventureWorksDW2019_log.ldf';"
 
     - name: Export tables to CSV using BCP
       run: |
         # Create the export directory within the container
         docker exec sqlserver mkdir -p /var/opt/mssql/csv_exports
         # Get the list of tables to export
-        TABLE_NAMES=$(docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -d AdventureWorks -Q "SET NOCOUNT ON; SELECT TABLE_SCHEMA + '.' + TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE';" -h -1 | tail -n +3)
+        TABLE_NAMES=$(docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -d AdventureWorksDW2019 -Q "SET NOCOUNT ON; SELECT TABLE_SCHEMA + '.' + TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE';" -h -1 | tail -n +3)
         # Export each table to CSV
         for table in $TABLE_NAMES; do
-          docker exec sqlserver /opt/mssql-tools/bin/bcp AdventureWorks.$table out /var/opt/mssql/csv_exports/$(echo $table | sed 's/\./_/g').csv -c -t, -S localhost -U sa -P 'YourStrong!Passw0rd'
+          docker exec sqlserver /opt/mssql-tools/bin/bcp AdventureWorksDW2019.$table out /var/opt/mssql/csv_exports/$(echo $table | sed 's/\./_/g').csv -c -t, -S localhost -U sa -P 'YourStrong!Passw0rd'
         done
         # Copy the csv_exports directory from the container to the host
         docker cp sqlserver:/var/opt/mssql/csv_exports $(pwd)/csv_exports
