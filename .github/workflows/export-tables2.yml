@@ -65,17 +65,13 @@ jobs:
       env:
         SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
 
-    - name: Enable xp_cmdshell
-      run: |
-        docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${{ secrets.SA_PASSWORD }} -Q "EXEC sp_configure 'show advanced options', 1; RECONFIGURE; EXEC sp_configure 'xp_cmdshell', 1; RECONFIGURE;"
-      env:
-        SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
-
     - name: Export Tables to CSV
       run: |
         mkdir -p csv_exports
-        docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${{ secrets.SA_PASSWORD }} -d AdventureWorks -Q "SET NOCOUNT ON; DECLARE @tablename AS NVARCHAR(500); DECLARE table_cursor CURSOR FOR SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'; OPEN table_cursor; FETCH NEXT FROM table_cursor INTO @tablename; WHILE @@FETCH_STATUS = 0 BEGIN DECLARE @sql AS NVARCHAR(1000); SET @sql = 'bcp AdventureWorks.' + @tablename + ' out /csv_exports/' + @tablename + '.csv -c -t, -S localhost -U sa -P ' + '${{ secrets.SA_PASSWORD }}'; EXEC xp_cmdshell @sql; FETCH NEXT FROM table_cursor INTO @tablename; END; CLOSE table_cursor; DEALLOCATE table_cursor;"
-        docker cp sqlserver:/csv_exports $(pwd)/csv_exports
+        TABLE_NAMES=$(docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${{ secrets.SA_PASSWORD }} -Q "SET NOCOUNT ON; SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE';" -h -1 | tail -n +3)
+        for table in $TABLE_NAMES; do
+          docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${{ secrets.SA_PASSWORD }} -Q "SET NOCOUNT ON; SELECT * FROM $table;" -W -w 1024 | sed 's/ /,/g' > csv_exports/$table.csv
+        done
       env:
         SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
 
