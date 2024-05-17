@@ -19,14 +19,18 @@ jobs:
         docker pull mcr.microsoft.com/mssql/server:2019-latest
         docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=${{ secrets.SA_PASSWORD }}' -p 1433:1433 -d --name sqlserver mcr.microsoft.com/mssql/server:2019-latest
         # Wait for SQL Server to be fully up and running
-        for i in {1..30}; do
-          if docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${{ secrets.SA_PASSWORD }} -Q "SELECT 1" &> /dev/null; then
+        for i in {1..60}; do
+          if docker logs sqlserver 2>&1 | grep -q "SQL Server is now ready for client connections"; then
             echo "SQL Server is up and running"
             break
           fi
-          echo "Waiting for SQL Server to start..."
+          echo "Waiting for SQL Server to start... ($i/60)"
           sleep 5
         done
+        if [ $i -eq 60 ]; then
+          echo "SQL Server failed to start in time"
+          exit 1
+        fi
 
     - name: Restore AdventureWorks Database
       run: |
@@ -38,13 +42,4 @@ jobs:
     - name: Export Tables to CSV
       run: |
         mkdir -p csv_exports
-        docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${{ secrets.SA_PASSWORD }} -d AdventureWorks -Q "SET NOCOUNT ON; DECLARE @tablename AS NVARCHAR(500); DECLARE table_cursor CURSOR FOR SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'; OPEN table_cursor; FETCH NEXT FROM table_cursor INTO @tablename; WHILE @@FETCH_STATUS = 0 BEGIN DECLARE @sql AS NVARCHAR(1000); SET @sql = 'bcp AdventureWorks.' + @tablename + ' out /csv_exports/' + @tablename + '.csv -c -t, -S localhost -U sa -P ' + '${{ secrets.SA_PASSWORD }}'; EXEC xp_cmdshell @sql; FETCH NEXT FROM table_cursor INTO @tablename; END; CLOSE table_cursor; DEALLOCATE table_cursor;"
-        docker cp sqlserver:/csv_exports $(pwd)/csv_exports
-      env:
-        SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
-
-    - name: Upload CSV files
-      uses: actions/upload-artifact@v2
-      with:
-        name: csv-exports
-        path: csv_exports/
+        docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${{ secrets.SA_PASSWORD }} -d AdventureWorks -Q "SET NOCOUNT ON; DECLARE @tablename AS NVARCHAR(500); DECLARE table_cursor CURSOR FOR SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE'; OPEN table_cursor; FETCH NEXT FROM table_cursor INTO @tablename; WHILE @@FETCH_STATUS = 0 BEGIN DECLARE @sql AS NVARCHAR(1000); SET @sql = 'bcp AdventureWorks.' + @tablename + ' out /csv_exports/' + @tablename + '.csv -c
