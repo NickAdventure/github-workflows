@@ -19,7 +19,14 @@ jobs:
         docker pull mcr.microsoft.com/mssql/server:2019-latest
         docker run -e 'ACCEPT_EULA=Y' -e 'SA_PASSWORD=${{ secrets.SA_PASSWORD }}' -p 1433:1433 -d --name sqlserver mcr.microsoft.com/mssql/server:2019-latest
         # Wait for SQL Server to be fully up and running
-        sleep 30
+        for i in {1..30}; do
+          if docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${{ secrets.SA_PASSWORD }} -Q "SELECT 1" &> /dev/null; then
+            echo "SQL Server is up and running"
+            break
+          fi
+          echo "Waiting for SQL Server to start..."
+          sleep 5
+        done
 
     - name: Restore AdventureWorks Database
       run: |
