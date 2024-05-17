@@ -66,7 +66,7 @@ jobs:
         for table in $TABLE_NAMES; do
           FILE_NAME=$(echo $table | tr '.' '_')
           # Check if table exists
-          TABLE_EXISTS=$(docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -d AdventureWorks2019 -Q "IF OBJECT_ID('$table', 'U') IS NOT NULL SELECT 1 ELSE SELECT 0" -h -1 | tail -n +3)
+          TABLE_EXISTS=$(docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -d AdventureWorks2019 -Q "IF OBJECT_ID('$table', 'U') IS NOT NULL PRINT '1' ELSE PRINT '0'" -h -1 | tail -n 1 | tr -d ' ')
           if [ "$TABLE_EXISTS" -eq 1 ]; then
             echo "Exporting $table..."
             # Export the headers
