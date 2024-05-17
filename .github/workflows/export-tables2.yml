@@ -53,6 +53,8 @@ jobs:
 
     - name: Export tables to CSV using BCP
       run: |
+        # Create the export directory on the host machine
+        mkdir -p $(pwd)/csv_exports
         # Create the export directory within the container
         docker exec sqlserver mkdir -p /var/opt/mssql/csv_exports
         # Get the list of tables to export
@@ -71,6 +73,7 @@ jobs:
         done
         # Copy the csv_exports directory from the container to the host
         docker cp sqlserver:/var/opt/mssql/csv_exports $(pwd)/csv_exports
+
 
     - name: Upload CSV files
       uses: actions/upload-artifact@v2
