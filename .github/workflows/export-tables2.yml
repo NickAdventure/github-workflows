@@ -51,6 +51,13 @@ jobs:
         LOGICAL_LOG_NAME=$(docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -Q "RESTORE FILELISTONLY FROM DISK = '/AdventureWorks2019.bak';" | awk '/AdventureWorks/ && /Log/ {print $1}')
         docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -Q "RESTORE DATABASE AdventureWorks2019 FROM DISK = '/AdventureWorks2019.bak' WITH MOVE '$LOGICAL_DATA_NAME' TO '/var/opt/mssql/data/AdventureWorks2019.mdf', MOVE '$LOGICAL_LOG_NAME' TO '/var/opt/mssql/data/AdventureWorks2019_log.ldf';"
 
+    - name: Verify tables exist in AdventureWorks2019
+      run: |
+        docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -Q "SELECT TABLE_SCHEMA, TABLE_NAME FROM AdventureWorks2019.INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE';" > tables.txt
+        echo "Tables in AdventureWorks2019:"
+        cat tables.txt
+      continue-on-error: true
+
     - name: Create export directory on host
       run: mkdir -p $(pwd)/csv_exports
 
