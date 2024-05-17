@@ -44,7 +44,10 @@ jobs:
         fi
 
     - name: Copy AdventureWorks.bak to SQL Server container
-      run: docker cp $(pwd)/AdventureWorks.bak sqlserver:/AdventureWorks.bak
+      run: |
+        docker cp $(pwd)/AdventureWorks.bak sqlserver:/AdventureWorks.bak
+        echo "File copied. Checking file in container..."
+        docker exec sqlserver ls -lh /AdventureWorks.bak
 
     - name: Restore AdventureWorks Database
       run: |
