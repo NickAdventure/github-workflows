@@ -65,6 +65,12 @@ jobs:
       env:
         SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
 
+    - name: Enable xp_cmdshell
+      run: |
+        docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${{ secrets.SA_PASSWORD }} -Q "EXEC sp_configure 'show advanced options', 1; RECONFIGURE; EXEC sp_configure 'xp_cmdshell', 1; RECONFIGURE;"
+      env:
+        SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
+
     - name: Export Tables to CSV
       run: |
         mkdir -p csv_exports
