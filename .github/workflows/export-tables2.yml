@@ -65,9 +65,10 @@ jobs:
         TABLE_NAMES=$(docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -d AdventureWorks -Q "SET NOCOUNT ON; SELECT TABLE_SCHEMA + '.' + TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE';" -h -1 | tail -n +3)
         # Export each table to CSV
         for table in $TABLE_NAMES; do
-          docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -d AdventureWorks -Q "SET NOCOUNT ON; SELECT * FROM $table" -s"," -W > csv_exports/$(echo $table | sed 's/\./_/g').csv
-          docker cp sqlserver:/csv_exports/$(echo $table | sed 's/\./_/g').csv csv_exports/
+          docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -d AdventureWorks -Q "SET NOCOUNT ON; SELECT * FROM $table" -s"," -W > /csv_exports/$(echo $table | sed 's/\./_/g').csv
         done
+        # Copy the csv_exports directory from the container to the host
+        docker cp sqlserver:/csv_exports $(pwd)/csv_exports
 
     - name: Upload CSV files
       uses: actions/upload-artifact@v2
