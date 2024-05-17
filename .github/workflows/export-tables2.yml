@@ -62,11 +62,11 @@ jobs:
         # Create the export directory within the container
         docker exec sqlserver mkdir -p /csv_exports
         # Get the list of tables to export
-        TABLE_NAMES=$(docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -Q "SET NOCOUNT ON; SELECT TABLE_NAME FROM AdventureWorks.INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE';" -h -1 | tail -n +3)
+        TABLE_NAMES=$(docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -d AdventureWorks -Q "SET NOCOUNT ON; SELECT TABLE_SCHEMA + '.' + TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE';" -h -1 | tail -n +3)
         # Export each table to CSV
         for table in $TABLE_NAMES; do
-          docker exec sqlserver /opt/mssql-tools/bin/bcp AdventureWorks..$table out /csv_exports/$table.csv -c -t, -S localhost -U sa -P 'YourStrong!Passw0rd'
-          docker cp sqlserver:/csv_exports/$table.csv csv_exports/
+          docker exec sqlserver /opt/mssql-tools/bin/bcp "SELECT * FROM $table" queryout /csv_exports/$(echo $table | sed 's/\./_/g').csv -c -t, -S localhost -U sa -P 'YourStrong!Passw0rd'
+          docker cp sqlserver:/csv_exports/$(echo $table | sed 's/\./_/g').csv csv_exports/
         done
 
     - name: Upload CSV files
