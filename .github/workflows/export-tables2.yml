@@ -48,6 +48,7 @@ jobs:
         docker cp $(pwd)/AdventureWorks.bak sqlserver:/AdventureWorks.bak
         echo "File copied. Checking file in container..."
         docker exec sqlserver ls -lh /AdventureWorks.bak
+        docker exec sqlserver du -h /AdventureWorks.bak
 
     - name: Restore AdventureWorks Database
       run: |
