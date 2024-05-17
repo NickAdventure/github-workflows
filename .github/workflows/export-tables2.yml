@@ -11,6 +11,16 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v2
 
+    - name: Check .bak file exists
+      run: |
+        if [ ! -f $(pwd)/AdventureWorks.bak ]; then
+          echo "AdventureWorks.bak file not found!"
+          exit 1
+        else
+          echo "AdventureWorks.bak file found. File details:"
+          ls -lh $(pwd)/AdventureWorks.bak
+        fi
+
     - name: Set up SQL Server
       run: |
         docker pull mcr.microsoft.com/mssql/server:2019-latest
@@ -33,9 +43,11 @@ jobs:
           exit 1
         fi
 
+    - name: Copy AdventureWorks.bak to SQL Server container
+      run: docker cp $(pwd)/AdventureWorks.bak sqlserver:/AdventureWorks.bak
+
     - name: Restore AdventureWorks Database
       run: |
-        docker cp $(pwd)/AdventureWorks.bak sqlserver:/AdventureWorks.bak
         docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P ${{ secrets.SA_PASSWORD }} -Q "RESTORE DATABASE AdventureWorks FROM DISK = '/AdventureWorks.bak' WITH MOVE 'AdventureWorks_Data' TO '/var/opt/mssql/data/AdventureWorks.mdf', MOVE 'AdventureWorks_Log' TO '/var/opt/mssql/data/AdventureWorks_log.ldf';"
       env:
         SA_PASSWORD: ${{ secrets.SA_PASSWORD }}
