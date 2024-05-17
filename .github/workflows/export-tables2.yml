@@ -56,7 +56,6 @@ jobs:
         docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -Q "SELECT TABLE_SCHEMA, TABLE_NAME FROM AdventureWorks2019.INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE = 'BASE TABLE';" > tables.txt
         echo "Tables in AdventureWorks2019:"
         cat tables.txt
-      continue-on-error: true
 
     - name: Create export directory on host
       run: mkdir -p $(pwd)/csv_exports
@@ -73,7 +72,7 @@ jobs:
         for table in $TABLE_NAMES; do
           FILE_NAME=$(echo $table | tr '.' '_')
           # Check if table exists
-          TABLE_EXISTS=$(docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -d AdventureWorks2019 -Q "IF OBJECT_ID('$table', 'U') IS NOT NULL PRINT '1' ELSE PRINT '0'" -h -1 | tail -n 1 | tr -d ' ')
+          TABLE_EXISTS=$(docker exec sqlserver /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P 'YourStrong!Passw0rd' -d AdventureWorks2019 -Q "IF OBJECT_ID('$table', 'U') IS NOT NULL SELECT 1 ELSE SELECT 0" -h -1 | tail -n +3)
           if [ "$TABLE_EXISTS" -eq 1 ]; then
             echo "Exporting $table..."
             # Export the headers
